@@ -13,6 +13,7 @@ function getRandomInt(min, max) {
     return Math.floor(Math.random() * (int_max - int_min)) + int_min;
 }
 
+
 class DoubleBufferingCanvas {
     constructor(canvas_id, canvas_wrap_name) {
         this.canvas_id = canvas_id;
@@ -75,35 +76,42 @@ class Draw {
 class DrawBack extends Draw {
     constructor(backCanvases, ) {
         super(backCanvases);
+        this.patten_canvas = document.createElement('canvas');
+        this.patten_context = this.patten_canvas.getContext('2d');
+        this.patten_canvas.width = 2;
+        this.patten_canvas.height = 4;
+
+        //縦方向にグラデーションさせる
+        let gradation = this.patten_context.createLinearGradient(1, Math.ceil(this.patten_canvas.height / 2), 1, this.patten_canvas.height);
+        gradation.addColorStop(0, 'rgb(44,56,107)');
+        gradation.addColorStop(0.5, 'rgb(44,56,107)');
+        gradation.addColorStop(0.5, 'rgb(40,53,102)');
+        gradation.addColorStop(1, 'rgb(40,53,102)');
+        this.patten_context.fillStyle = gradation;
+        this.patten_context.fillRect(0, 0, this.patten_canvas.width, this.patten_canvas.height);
     }
     draw() {
         this.context.beginPath();
-        let repeat_fill_unit_height = 4;
-        let fill_num = Math.ceil(this.canvas.height / repeat_fill_unit_height);
-        let begin_y = 0;
-        let end_y = 0;
-        for (var i = 0; i <= fill_num; i++) {
-            this.context.beginPath();
-            begin_y = repeat_fill_unit_height * i;
-            end_y = begin_y + repeat_fill_unit_height;
-            //縦方向にグラデーションする
-            let g = this.context.createLinearGradient(this.canvas.width / 2, begin_y, this.canvas.width / 2, end_y);
-            g.addColorStop(0, 'rgb(44,56,107)');
-            g.addColorStop(0.5, 'rgb(44,56,107)');
-            g.addColorStop(0.5, 'rgb(40,53,102)');
-            g.addColorStop(1, 'rgb(40,53,102)');
-            this.context.fillStyle = g;
-            //塗りつぶしの矩形
-            this.context.fillRect(0, begin_y, this.canvas.width, end_y);
-        }
+        this.context.fillStyle = this.context.createPattern(this.patten_canvas,'repeat');
+        this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 }
 
-class DrawStartLainOsTopSmallCrcle extends Draw {
+class DrawStartLainOsMotions extends Draw {
     constructor(backCanvases, display_width = 1920, display_height = 1060) {
         super(backCanvases);
         this.display_width = display_width;
         this.display_height = display_height;
+        this.is_finished_drawing_with_motion = false;
+    }
+    getIsFinishedDrawingWithMotion(){
+        return this.is_finished_drawing_with_motion;
+    }
+}
+
+class DrawStartLainOsTopSmallCrcle extends DrawStartLainOsMotions{
+    constructor(backCanvases, display_width = 1920, display_height = 1060) {
+        super(backCanvases);
         this.crcle_x = this.display_width / 2;
         this.crcle_y = 0;
         this.end_crcle_y = Math.ceil(this.display_height * 0.75);
@@ -113,13 +121,9 @@ class DrawStartLainOsTopSmallCrcle extends Draw {
         this.circle_v = 10;
         this.circle_opacity = 0.80;
         this.circle_opacity_v = 0.125;
-        this.is_draw_end = false;
-    }
-    getIsDrawEnd(){
-        return this.is_draw_end;
     }
     draw() {
-        let is_draw_execute = !(this.getIsDrawEnd());
+        let is_draw_execute = !(this.getIsFinishedDrawingWithMotion());
         if(is_draw_execute) {
             this.context.beginPath();
             this.context.shadowColor = 'rgb(56,149,223)';
@@ -134,7 +138,7 @@ class DrawStartLainOsTopSmallCrcle extends Draw {
                 }
                 else{
                     this.circle_opacity = 0;
-                    this.is_draw_end = true;
+                    this.is_finished_drawing_with_motion = true;
                 }
             }
             this.context.fillStyle = 'rgba(80,189,244,'+ this.circle_opacity + ')';
@@ -149,14 +153,15 @@ class DrawStartLainOsTopSmallCrcle extends Draw {
             this.context.fill();
             this.crcle_y += this.circle_v;
         }
+        else {
+            return;
+        }
     }
 }
 
-class DrawStartLainOsBottomSmallCrcle extends Draw {
+class DrawStartLainOsBottomSmallCrcle extends DrawStartLainOsMotions {
     constructor(backCanvases, display_width = 1920, display_height = 1060) {
         super(backCanvases);
-        this.display_width = display_width;
-        this.display_height = display_height;
         this.crcle_x = this.display_width / 2;
         this.crcle_y = this.display_height;
         this.end_crcle_y = Math.ceil(this.display_height * 0.25);
@@ -165,16 +170,12 @@ class DrawStartLainOsBottomSmallCrcle extends Draw {
         this.crcle_end_rad = 360 * Math.PI / 180;
         this.circle_v = 10;
         this.circle_opacity = 0.80;
-        this.is_draw_end = false;
-    }
-    getIsDrawEnd(){
-        return this.is_draw_end;
     }
     draw() {
         this.context.beginPath();
         if(this.crcle_y < this.end_crcle_y) {
             this.crcle_y = this.end_crcle_y;
-            this.is_draw_end = true;
+            this.is_finished_drawing_with_motion = true;
         }
 
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -193,24 +194,30 @@ class DrawStartLainOsBottomSmallCrcle extends Draw {
             false
             );
         this.context.fill();
-        let is_draw_execute = !(this.getIsDrawEnd());
+        let is_draw_execute = !(this.getIsFinishedDrawingWithMotion());
         if(is_draw_execute) {
             this.crcle_y -= this.circle_v;
         }
     }
 }
 
+class DrawStartLainOsBottomRotateCrcle extends Draw {
+    constructor(backCanvases, display_width = 1920, display_height = 1060) {
+        super(backCanvases);
+    }
+}
+
 class DrawStartLainOs extends Draw {
     constructor(backCanvases, display_width = 1920, display_height = 1060) {
         super(backCanvases);
-        this.bask = new DrawBack(backCanvases);
-        this.top_small_crcle = new DrawStartLainOsTopSmallCrcle(backCanvases);
+        this.back               = new DrawBack(backCanvases);
+        this.top_small_crcle    = new DrawStartLainOsTopSmallCrcle(backCanvases);
         this.bottom_small_crcle = new DrawStartLainOsBottomSmallCrcle(backCanvases);
     }
     draw() {
-        this.bask.draw();
+        this.back.draw();
         this.top_small_crcle.draw();
-        if (this.top_small_crcle.getIsDrawEnd()) {
+        if (this.top_small_crcle.getIsFinishedDrawingWithMotion()) {
             this.bottom_small_crcle.draw();
         }
     }
