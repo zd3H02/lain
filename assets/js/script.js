@@ -14,7 +14,7 @@ const KEY_END_VALUE     = "end_value";
 const KEY_MILLISECONDS  = "milliseconds";
 const KEY_V             = "v";
 const KEY_VALUE         = "value";
-
+const KEY_ARRIVED_COUNT = "arrived_count";
 
 const required = (param) => {
     throw new Error(`Required parameter, "${param}"`);
@@ -37,8 +37,6 @@ function arcWrap({
     }={}) {
     context.arc(x, y, radius, startAngle, endAngle, anticlockwise);
 }
-
-
 
 class DoubleBufferingCanvas {
     constructor(canvas_id, canvas_wrap_name) {
@@ -140,7 +138,7 @@ class AnimationController {
         this.fps = fps;
         this.animation_move_sets = [];
         for(let animation_define_set of animation_define_sets) {
-            let v = this._getV({
+            let v = this._getVelocity({
                 begin_value     : animation_define_set.KEY_BEGIN_VALUE,
                 end_value       : animation_define_set.KEY_END_VALUE,
                 milliseconds    : animation_define_set.KEY_MILLISECONDS,
@@ -152,6 +150,8 @@ class AnimationController {
                 KEY_MILLISECONDS    : animation_define_set.KEY_MILLISECONDS,
                 KEY_V               : v,
                 KEY_VALUE           : animation_define_set.KEY_BEGIN_VALUE,
+                KEY_VALUE           : animation_define_set.KEY_BEGIN_VALUE,
+                KEY_ARRIVED_COUNT   : 0,
             };
             this.animation_move_sets.push(animatin_move_set);
         }
@@ -159,9 +159,10 @@ class AnimationController {
         // this.pos = this.animation_move_sets[0].KEY_BEGIN_VALUE;
         this.is_begin_update = false;
         this.is_move_completed = false;
+        this.is_call_animation_completed_once = false;
         this.is_repeat = false;
     }
-    _getV({
+    _getVelocity({
         begin_value     = required("begin_value"),
         end_value       = required("end_value"),
         milliseconds    = required("milliseconds"),
@@ -170,7 +171,7 @@ class AnimationController {
         let draw_update_num = milliseconds / (1000 / this.fps);
         return  move_distance / draw_update_num;
     }
-    getPos() {
+    getValue() {
         let callback = this.animation_move_sets[this.i].KEY_CALLBACK;
         let is_callvack_exits = callback !== undefined;
         let value = this.animation_move_sets[this.i].KEY_VALUE
@@ -187,24 +188,41 @@ class AnimationController {
     getIsAnimationCompleted(){
         return this.is_move_completed;
     }
+    getIsAnimationCompletedOnce() {
+        if(this.is_call_animation_completed_once) {
+            return false;
+        }
+        else if(this.is_move_completed) {
+            this.is_call_animation_completed_once = true;
+            return true;
+        }
+    }
     setIsBeginUpdate() {
         this.is_begin_update = true;
     }
     setIsRepeat() {
         this.is_repeat = true;
     }
-    updatePos() {
+    updateValue() {
         let is_update = this.is_begin_update && !(this.is_move_completed);
         if(is_update) {
-            let end_value   = this.animation_move_sets[this.i].KEY_END_VALUE;
-            let v           = this.animation_move_sets[this.i].KEY_V;
-            let value       = this.animation_move_sets[this.i].KEY_VALUE;
+            let end_value       = this.animation_move_sets[this.i].KEY_END_VALUE;
+            let v               = this.animation_move_sets[this.i].KEY_V;
+            let value           = this.animation_move_sets[this.i].KEY_VALUE;
+            let arrived_count   = this.animation_move_sets[this.i].KEY_ARRIVED_COUNT;
+            let milliseconds    = this.animation_move_sets[this.i].KEY_MILLISECONDS;
+
+            let is_v_0 = v === 0;
+            let is_v_0_arrived = is_v_0 && (arrived_count >= (milliseconds / (1000 / this.fps)));
 
             let is_v_positive_direction = v >= 0;
-            let is_arrived_positive_direction = is_v_positive_direction && (value >= end_value + v);
-            let is_arrived_negative_direction = !(is_v_positive_direction) && (value <= end_value - v);
-            let is_arrived = is_arrived_positive_direction || is_arrived_negative_direction;
-            if(is_arrived ) {
+            let is_arrived_positive_direction = is_v_positive_direction && (value >= end_value);
+            let is_arrived_negative_direction = !(is_v_positive_direction) && (value <= end_value);
+            let is_v_exits = !(is_v_0);
+            let is_v_exits_arrived = is_v_exits && (is_arrived_positive_direction || is_arrived_negative_direction);
+
+            let is_arrived = is_v_0_arrived  || is_v_exits_arrived;
+            if(is_arrived) {
                 this.animation_move_sets[this.i].KEY_VALUE = end_value;
                 let is_last = this.i === this.animation_move_sets.length - 1;
                 if(is_last) {
@@ -225,6 +243,7 @@ class AnimationController {
             else {
                 this.animation_move_sets[this.i].KEY_VALUE += v;
             }
+            this.animation_move_sets[this.i].KEY_ARRIVED_COUNT++;
         }
     }
 }
@@ -249,8 +268,8 @@ class DrawStartLainOsTopSmallCrcle extends DrawStartLainOsAnimation{
             new AnimationController({
                animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0,
-                        KEY_END_VALUE         : Math.round(this.display_height * 0.70),
+                        KEY_BEGIN_VALUE     : 0,
+                        KEY_END_VALUE       : Math.round(this.display_height * 0.70),
                         KEY_MILLISECONDS    : 1250,
                     },
                 ],
@@ -260,15 +279,18 @@ class DrawStartLainOsTopSmallCrcle extends DrawStartLainOsAnimation{
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.80,
-                        KEY_END_VALUE         : 0,
-                        KEY_MILLISECONDS    : 150,
+                        KEY_BEGIN_VALUE     : 0.80,
+                        KEY_END_VALUE       : 0,
+                        KEY_MILLISECONDS    : 300,
                     },
                 ],
                 fps : this.fps,
             });
     }
     getIsFinishedDrawingWithAnimation(){
+        return this.y.getIsAnimationCompleted() && this.opcity.getIsAnimationCompleted();
+    }
+    getIsExecuteNextDraw() {
         return this.y.getIsAnimationCompleted();
     }
     _draw() {
@@ -276,11 +298,11 @@ class DrawStartLainOsTopSmallCrcle extends DrawStartLainOsAnimation{
         if(is_draw_execute) {
 
             this.y.setIsBeginUpdate();
-            this.y.updatePos();
+            this.y.updateValue();
 
             if(this.y.getIsAnimationCompleted()) {
                 this.opcity.setIsBeginUpdate();
-                this.opcity.updatePos();
+                this.opcity.updateValue();
             }
 
             this.context.beginPath();
@@ -288,11 +310,11 @@ class DrawStartLainOsTopSmallCrcle extends DrawStartLainOsAnimation{
             this.context.shadowOffsetX = 0;
             this.context.shadowOffsetY = 0;
             this.context.shadowBlur = 15;
-            this.context.fillStyle = 'rgba(80,189,244,'+ this.opcity.getPos() + ')';
+            this.context.fillStyle = 'rgba(80,189,244,'+ this.opcity.getValue() + ')';
 
             arcWrap({
                 context : this.context,
-                y       : Math.round(this.y.getPos()),
+                y       : Math.round(this.y.getValue()),
                 radius  : 15,
             });
 
@@ -314,7 +336,7 @@ class DrawStartLainOsBottomSmallCrcle extends DrawStartLainOsAnimation {
                     {
                         KEY_BEGIN_VALUE       : this.display_height,
                         KEY_END_VALUE         : Math.round(this.display_height * 0.26),
-                        KEY_MILLISECONDS    : 1250,
+                        KEY_MILLISECONDS    : 2000,
                     },
                 ],
                 fps : this.fps,
@@ -325,7 +347,7 @@ class DrawStartLainOsBottomSmallCrcle extends DrawStartLainOsAnimation {
     }
     _draw() {
         this.y.setIsBeginUpdate();
-        this.y.updatePos();
+        this.y.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -335,7 +357,7 @@ class DrawStartLainOsBottomSmallCrcle extends DrawStartLainOsAnimation {
         this.context.fillStyle = 'rgba(80,189,244,'+ this.opacity + ')';
         arcWrap({
             context : this.context,
-            y       : Math.round(this.y.getPos()),
+            y       : Math.round(this.y.getValue()),
             radius  : 15,
         });
         this.context.fill();
@@ -350,8 +372,8 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : Math.round(this.display_height * 0.75),
-                        KEY_END_VALUE         : Math.round(this.display_height * 0.4),
+                        KEY_BEGIN_VALUE     : Math.round(this.display_height * 0.75),
+                        KEY_END_VALUE       : Math.round(this.display_height * 0.4),
                         KEY_MILLISECONDS    : 1000,
                     },
                 ],
@@ -361,14 +383,14 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 60,
-                        KEY_END_VALUE         : Math.round(this.display_width * 0.5),
+                        KEY_BEGIN_VALUE     : 60,
+                        KEY_END_VALUE       : Math.round(this.display_width * 0.5),
                         KEY_MILLISECONDS    : 1000,
                     },
                     {
-                        KEY_BEGIN_VALUE       : Math.round(this.display_width * 0.5),
-                        KEY_END_VALUE         : 60,
-                        KEY_MILLISECONDS    : 1000,
+                        KEY_BEGIN_VALUE     : Math.round(this.display_width * 0.5),
+                        KEY_END_VALUE       : 60,
+                        KEY_MILLISECONDS    : 750,
                     },
                 ],
                 fps : this.fps,
@@ -377,14 +399,14 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.1,
-                        KEY_END_VALUE         : 1,
+                        KEY_BEGIN_VALUE     : 0.1,
+                        KEY_END_VALUE       : 1,
                         KEY_MILLISECONDS    : 1000,
                     },
                     {
-                        KEY_BEGIN_VALUE       : 1,
-                        KEY_END_VALUE         : 0,
-                        KEY_MILLISECONDS    : 500,
+                        KEY_BEGIN_VALUE     : 1,
+                        KEY_END_VALUE       : 0,
+                        KEY_MILLISECONDS    : 750,
                     },
                 ],
                 fps : this.fps,
@@ -393,14 +415,14 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 10,
-                        KEY_END_VALUE         : 50,
+                        KEY_BEGIN_VALUE     : 10,
+                        KEY_END_VALUE       : 50,
                         KEY_MILLISECONDS    : 1000,
                     },
                     {
-                        KEY_BEGIN_VALUE       : 50,
-                        KEY_END_VALUE         : 1,
-                        KEY_MILLISECONDS    : 500,
+                        KEY_BEGIN_VALUE     : 50,
+                        KEY_END_VALUE       : 1,
+                        KEY_MILLISECONDS    : 750,
                     },
                 ],
                 fps : this.fps,
@@ -409,8 +431,8 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.25,
-                        KEY_END_VALUE         : 1,
+                        KEY_BEGIN_VALUE     : 0,
+                        KEY_END_VALUE       : 1,
                         KEY_MILLISECONDS    : 1000,
                     },
                 ],
@@ -437,7 +459,7 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
 
     }
     getNowR() {
-        return this.r.getPos();
+        return this.r.getValue();
     }
     _draw() {
         this.y.setIsBeginUpdate();
@@ -445,37 +467,28 @@ class DrawStartLainOsBottomRotateCrcle extends DrawStartLainOsAnimation {
         this.lineWidth.setIsBeginUpdate();
         this.opcity.setIsBeginUpdate();
         this.scale_y.setIsBeginUpdate();
-        this.y.updatePos();
-        this.r.updatePos();
-        this.lineWidth.updatePos();
-        this.opcity.updatePos();
-        this.scale_y.updatePos();
+        this.y.updateValue();
+        this.r.updateValue();
+        this.lineWidth.updateValue();
+        this.opcity.updateValue();
+        this.scale_y.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
         this.context.shadowOffsetX = 0;
         this.context.shadowOffsetY = 0;
         this.context.shadowBlur = 15;
-        this.context.scale(1, this.scale_y.getPos());
+        this.context.scale(1, this.scale_y.getValue());
 
         arcWrap({
             context         : this.context,
-            y               :  Math.round(this.y.getPos() / this.scale_y.getPos()),
-            radius          : this.r.getPos(),
+            y               :  Math.round(this.y.getValue() / this.scale_y.getValue()),
+            radius          : this.r.getValue(),
         });
 
-
-        // this.context.arc(
-        //    this.display_width / 2,
-        //     Math.round(this.y.getPos() / this.scale_y.getPos()),
-        //     this.r.getPos(),
-        //     0 * Math.PI / 180,
-        //     360 * Math.PI / 180,
-        //     false
-        //     );
         this.context.fillStyle = "rgba(0,0,0,0)";
-        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getPos() + ")";
-        this.context.lineWidth = this.lineWidth.getPos();
+        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.lineWidth = this.lineWidth.getValue();
 
         this.context.fill();
         this.context.stroke();
@@ -492,8 +505,8 @@ class DrawStartLainOsBigOutsideCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0,
-                        KEY_END_VALUE         : 0,
+                        KEY_BEGIN_VALUE     : 0,
+                        KEY_END_VALUE       : 0,
                         KEY_MILLISECONDS    : 0,
                     },
                 ],
@@ -505,8 +518,8 @@ class DrawStartLainOsBigOutsideCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.1,
-                        KEY_END_VALUE         : 1,
+                        KEY_BEGIN_VALUE     : 0.1,
+                        KEY_END_VALUE       : 1,
                         KEY_MILLISECONDS    : 1500,
                     },
                 ],
@@ -517,11 +530,22 @@ class DrawStartLainOsBigOutsideCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 50,
-                        KEY_END_VALUE         : 30,
-                        KEY_MILLISECONDS    : 1500,
+                        KEY_BEGIN_VALUE     : 150,
+                        KEY_END_VALUE       : 30,
+                        KEY_MILLISECONDS    : 1000,
                     },
+                ],
+                fps : this.fps,
+            });
 
+        this.angle =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 0,
+                        KEY_END_VALUE       : 0,
+                        KEY_MILLISECONDS    : 0,
+                    },
                 ],
                 fps : this.fps,
             });
@@ -535,27 +559,45 @@ class DrawStartLainOsBigOutsideCrcle extends DrawStartLainOsAnimation {
                 new AnimationController({
                     animation_define_sets : [
                         {
-                            KEY_BEGIN_VALUE       : now_r + 400,
-                            KEY_END_VALUE         : 100,
-                            KEY_MILLISECONDS    : 1500,
+                            KEY_BEGIN_VALUE     : now_r + 100,
+                            KEY_END_VALUE       : 100,
+                            KEY_MILLISECONDS    : 1000,
                         },
                     ],
                     fps : this.fps,
                 });
+            // this.angle =
+            //     new AnimationController({
+            //         animation_define_sets : [
+            //             {
+            //                 KEY_BEGIN_VALUE     : 0,
+            //                 KEY_END_VALUE       : 0,
+            //                 KEY_MILLISECONDS    : 1200,
+            //             },
+            //             {
+            //                 KEY_BEGIN_VALUE     : 0,
+            //                 KEY_END_VALUE       : 90,
+            //                 KEY_MILLISECONDS    : 1000,
+            //             },
+            //         ],
+            //         fps : this.fps,
+            //     });
             this.is_r_seted = true;
         }
     }
     getIsExecuteNextDraw() {
-        return this.is_r_seted && this.r.getPos() <= 800;
+        return this.is_r_seted && this.r.getValue() <= 800;
     }
     _draw() {
 
         this.r.setIsBeginUpdate();
-        this.r.updatePos();
+        this.r.updateValue();
         this.lineWidth.setIsBeginUpdate();
-        this.lineWidth.updatePos();
+        this.lineWidth.updateValue();
         this.opcity.setIsBeginUpdate();
-        this.opcity.updatePos();
+        this.opcity.updateValue();
+        this.angle.setIsBeginUpdate();
+        this.angle.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -565,11 +607,27 @@ class DrawStartLainOsBigOutsideCrcle extends DrawStartLainOsAnimation {
         arcWrap({
             context         : this.context,
             y               : Math.round(this.display_height * 0.4),
-            radius          : this.r.getPos(),
+            radius          : this.r.getValue(),
+            // startAngle      : this.r.getIsAnimationCompleted() ? ((90.1 + this.angle.getValue()) * Math.PI / 180) : (0),
+            // endAngle        : this.r.getIsAnimationCompleted() ? ((89.9 - this.angle.getValue()) * Math.PI / 180) : (2 * Math.PI),
+            // anticlockwise   : false,
         });
         this.context.fillStyle = "rgba(0,0,0,0)";
-        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getPos() + ")";
-        this.context.lineWidth = this.lineWidth.getPos();
+        if(this.r.getIsAnimationCompletedOnce()) {
+            this.opcity =
+                new AnimationController({
+                    animation_define_sets : [
+                        {
+                            KEY_BEGIN_VALUE     : 1,
+                            KEY_END_VALUE       : 0,
+                            KEY_MILLISECONDS    : 1000,
+                        },
+                    ],
+                    fps : this.fps,
+                });
+        }
+        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.lineWidth = this.lineWidth.getValue();
 
         this.context.fill();
         this.context.stroke();
@@ -583,8 +641,8 @@ class DrawStartLainOsBigInsideCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 300,
-                        KEY_END_VALUE         : 50,
+                        KEY_BEGIN_VALUE     : 300,
+                        KEY_END_VALUE       : 50,
                         KEY_MILLISECONDS    : 800,
                     },
                 ],
@@ -594,8 +652,8 @@ class DrawStartLainOsBigInsideCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.1,
-                        KEY_END_VALUE         : 1,
+                        KEY_BEGIN_VALUE     : 0.1,
+                        KEY_END_VALUE       : 1,
                         KEY_MILLISECONDS    : 1500,
                     },
                 ],
@@ -604,9 +662,9 @@ class DrawStartLainOsBigInsideCrcle extends DrawStartLainOsAnimation {
     }
     _draw() {
         this.r.setIsBeginUpdate();
-        this.r.updatePos();
+        this.r.updateValue();
         this.opcity.setIsBeginUpdate();
-        this.opcity.updatePos();
+        this.opcity.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -616,9 +674,9 @@ class DrawStartLainOsBigInsideCrcle extends DrawStartLainOsAnimation {
         arcWrap({
             context         : this.context,
             y               : Math.round(this.display_height * 0.4),
-            radius          : this.r.getPos(),
+            radius          : this.r.getValue(),
         });
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getPos() + ")";
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
         this.context.fill();
     }
 }
@@ -631,8 +689,8 @@ class DrawStartLainOsBigTranslucentCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_BEGIN_VALUE       : 0.0,
-                        KEY_END_VALUE         : 0.1,
+                        KEY_BEGIN_VALUE     : 0.0,
+                        KEY_END_VALUE       : 0.1,
                         KEY_MILLISECONDS    : 2000,
                     },
                 ],
@@ -641,7 +699,7 @@ class DrawStartLainOsBigTranslucentCrcle extends DrawStartLainOsAnimation {
     }
     _draw() {
         this.opcity.setIsBeginUpdate();
-        this.opcity.updatePos();
+        this.opcity.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -653,7 +711,7 @@ class DrawStartLainOsBigTranslucentCrcle extends DrawStartLainOsAnimation {
             y               : Math.round(this.display_height * 0.4),
             radius          : 150,
         });
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getPos() + ")";
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
         this.context.fill();
     }
 }
@@ -662,15 +720,26 @@ class DrawStartLainOsBigTranslucentCrcle extends DrawStartLainOsAnimation {
 class DrawStartLainOsTopRightSmallCrcle extends DrawStartLainOsAnimation {
     constructor(backCanvases, display_width = 1920, display_height = 1060, fps = FPS) {
         super(backCanvases);
-        console.log(Math.sin(90 * Math.PI / 180));
-        this.x =
+        this.left_x =
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_CALLBACK :  (x) => { return Math.round(this.display_width * 0.5 + 150 * Math.sin((x + 90) * Math.PI / 180)); },
-                        KEY_BEGIN_VALUE       : 90,
-                        KEY_END_VALUE         : -45,
-                        KEY_MILLISECONDS    : 2000,
+                        KEY_CALLBACK :  (x) => { return Math.round(this.display_width * 0.5 - 50 - 200 *  Math.cos((x) * Math.PI / 180)); },
+                        KEY_BEGIN_VALUE     : 90,
+                        KEY_END_VALUE       : -30,
+                        KEY_MILLISECONDS    : 750,
+                    },
+                ],
+                fps : this.fps,
+            });
+        this.right_x =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_CALLBACK :  (x) => { return Math.round(this.display_width * 0.5 + 50 + 200 * Math.cos((x) * Math.PI / 180)); },
+                        KEY_BEGIN_VALUE     : 90,
+                        KEY_END_VALUE       : -30,
+                        KEY_MILLISECONDS    : 750,
                     },
                 ],
                 fps : this.fps,
@@ -679,10 +748,10 @@ class DrawStartLainOsTopRightSmallCrcle extends DrawStartLainOsAnimation {
             new AnimationController({
                 animation_define_sets : [
                     {
-                        KEY_CALLBACK : (y) => { return Math.round(this.display_height * 0.4 + 150 * Math.cos((y + 90) * Math.PI / 180 )) },
-                        KEY_BEGIN_VALUE       : 90,
-                        KEY_END_VALUE         : -45,
-                        KEY_MILLISECONDS    : 2000,
+                        KEY_CALLBACK : (y) => { return Math.round(this.display_height * 0.4 - 200 * Math.sin((y) * Math.PI / 180 )) },
+                        KEY_BEGIN_VALUE     : 90,
+                        KEY_END_VALUE       : -30,
+                        KEY_MILLISECONDS    : 750,
                     },
                 ],
                 fps : this.fps,
@@ -700,12 +769,14 @@ class DrawStartLainOsTopRightSmallCrcle extends DrawStartLainOsAnimation {
             });
     }
     _draw() {
-        this.x.setIsBeginUpdate();
-        this.x.updatePos();
+        this.left_x.setIsBeginUpdate();
+        this.left_x.updateValue();
+        this.right_x.setIsBeginUpdate();
+        this.right_x.updateValue();
         this.y.setIsBeginUpdate();
-        this.y.updatePos();
+        this.y.updateValue();
         this.opcity.setIsBeginUpdate();
-        this.opcity.updatePos();
+        this.opcity.updateValue();
 
         this.context.beginPath();
         this.context.shadowColor = 'rgb(56,149,223)';
@@ -714,14 +785,229 @@ class DrawStartLainOsTopRightSmallCrcle extends DrawStartLainOsAnimation {
         this.context.shadowBlur = 15;
         arcWrap({
             context         : this.context,
-            x               : this.x.getPos(),
-            y               : this.y.getPos(),
+            x               : this.right_x.getValue(),
+            y               : this.y.getValue(),
             radius          : 15,
         });
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getPos() + ")";
+        arcWrap({
+            context         : this.context,
+            x               : this.left_x.getValue(),
+            y               : this.y.getValue(),
+            radius          : 15,
+        });
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
         this.context.fill();
     }
 }
+
+
+class DrawStartLainOsAngleBrackets extends DrawStartLainOsAnimation {
+    constructor(backCanvases, display_width = 1920, display_height = 1060, fps = FPS) {
+        super(backCanvases);
+        this.left_x =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 1,
+                        KEY_END_VALUE       : this.display_width / 2 - 225,
+                        KEY_MILLISECONDS    : 1000,
+                    },
+                ],
+                fps : this.fps,
+            });
+        this.right_x =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : this.display_width,
+                        KEY_END_VALUE       : this.display_width / 2 + 225,
+                        KEY_MILLISECONDS    : 1000,
+                    },
+                ],
+                fps : this.fps,
+            });
+        this.opcity =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 0.0,
+                        KEY_END_VALUE       : 1.0,
+                        KEY_MILLISECONDS    : 1500,
+                    },
+                ],
+                fps : this.fps,
+            });
+    }
+    _draw() {
+        this.left_x.setIsBeginUpdate();
+        this.left_x.updateValue();
+        this.right_x.setIsBeginUpdate();
+        this.right_x.updateValue();
+        this.opcity.setIsBeginUpdate();
+        this.opcity.updateValue();
+
+        this.context.beginPath();
+        this.context.shadowColor = 'rgb(56,149,223)';
+        this.context.shadowOffsetX = 0;
+        this.context.shadowOffsetY = 0;
+        this.context.shadowBlur = 15;
+
+        let radius  = 20;
+        let i_max   = 25;
+        let left_x  = Math.round(this.left_x.getValue());
+        let right_x = Math.round(this.right_x.getValue());
+        let y       = Math.round(this.display_height * 0.4);
+        let sqrt_r   = Math.sqrt(radius);
+        for(let i = 0; i <= i_max; i++) {
+            arcWrap({
+                context         : this.context,
+                x               : Math.round(right_x - sqrt_r * i),
+                y               : Math.round(y - sqrt_r * i),
+                radius          : radius,
+            });
+        }
+        for(let i = 0; i <= i_max; i++) {
+        arcWrap({
+                context         : this.context,
+                x               : Math.round(right_x - sqrt_r * i),
+                y               : Math.round(y + sqrt_r * i),
+                radius          : radius,
+            });
+         }
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+        this.context.closePath();
+        this.context.beginPath();
+        for(let i = 0; i <= i_max; i++) {
+            arcWrap({
+                context         : this.context,
+                x               : Math.round(left_x + sqrt_r * i),
+                y               : Math.round(y - sqrt_r * i),
+                radius          : radius,
+            });
+        }
+        for(let i = 0; i <= i_max; i++) {
+        arcWrap({
+                context         : this.context,
+                x               : Math.round(left_x + sqrt_r * i),
+                y               : Math.round(y + sqrt_r * i),
+                radius          : radius,
+            });
+         }
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+    }
+}
+
+
+class DrawStartLainOsPai extends DrawStartLainOsAnimation {
+    constructor(backCanvases, display_width = 1920, display_height = 1060, fps = FPS) {
+        super(backCanvases);
+        this.x =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 1,
+                        KEY_END_VALUE       : this.display_width / 2 - 100,
+                        KEY_MILLISECONDS    : 1000,
+                    },
+                ],
+                fps : this.fps,
+            });
+        this.num =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 0,
+                        KEY_END_VALUE       : 15,
+                        KEY_MILLISECONDS    : 1000,
+                    },
+                ],
+                fps : this.fps,
+            });
+        this.opcity =
+            new AnimationController({
+                animation_define_sets : [
+                    {
+                        KEY_BEGIN_VALUE     : 0.0,
+                        KEY_END_VALUE       : 1.0,
+                        KEY_MILLISECONDS    : 1500,
+                    },
+                ],
+                fps : this.fps,
+            });
+    }
+    _draw() {
+        this.x.setIsBeginUpdate();
+        this.x.updateValue();
+        this.num.setIsBeginUpdate();
+        this.num.updateValue();
+        this.opcity.setIsBeginUpdate();
+        this.opcity.updateValue();
+
+        this.context.beginPath();
+        this.context.shadowColor = 'rgb(56,149,223)';
+        this.context.shadowOffsetX = 0;
+        this.context.shadowOffsetY = 0;
+        this.context.shadowBlur = 15;
+
+        let radius      = 15;
+        let left_x      = this.display_width / 2 - 50;
+        let right_x     = this.display_width / 2 + 50;
+        let y           = Math.round(this.display_height * 0.4);
+        let herf_radius = radius / 2;
+
+        arcWrap({
+            context         : this.context,
+            y               : y,
+            radius          : 100,
+            startAngle      : 120 * Math.PI / 180,
+            endAngle        : 60 * Math.PI / 180,
+        });
+        this.context.fillStyle = "rgba(0,0,0,0)";
+        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.lineWidth = 30;
+
+        // this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+        this.context.stroke();
+        this.context.closePath();
+        this.context.beginPath();
+
+        for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
+            arcWrap({
+                context         : this.context,
+                x               : Math.round(right_x),
+                y               : Math.round(y + herf_radius * i + 75),
+                radius          : radius,
+            });
+        }
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+        this.context.closePath();
+        this.context.beginPath();
+
+
+        for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
+            arcWrap({
+                context         : this.context,
+                x               : Math.round(left_x),
+                y               : Math.round(y + herf_radius * i + 75),
+                radius          : radius,
+            });
+        }
+
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+        this.context.closePath();
+        this.context.beginPath();
+
+        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.fill();
+    }
+}
+
+
 
 
 
@@ -736,11 +1022,14 @@ class DrawStartLainOs extends Draw {
         this.big_inside_crcle       = new DrawStartLainOsBigInsideCrcle(backCanvases);
         this.big_translucen_crcle   = new DrawStartLainOsBigTranslucentCrcle(backCanvases);
         this.top_right_small_crcle  = new DrawStartLainOsTopRightSmallCrcle(backCanvases);
+        this.angle_brackets         = new DrawStartLainOsAngleBrackets(backCanvases);
+        this.pai                    = new DrawStartLainOsPai(backCanvases);
     }
     _draw() {
         this.back.draw();
         this.top_small_crcle.draw();
-        if (this.top_small_crcle.getIsFinishedDrawingWithAnimation()) {
+
+        if (this.top_small_crcle.getIsExecuteNextDraw()) {
             this.bottom_small_crcle.draw();
             this.bottom_rotate_crcle.draw();
         }
@@ -748,13 +1037,15 @@ class DrawStartLainOs extends Draw {
         if(this.bottom_rotate_crcle.getIsExecuteNextDraw()) {
             this.big_outside_crcle.setOnleyOnceR(this.bottom_rotate_crcle.getNowR());
             this.big_outside_crcle.draw();
+            this.angle_brackets.draw();
         }
+
         if(this.big_outside_crcle.getIsExecuteNextDraw()) {
             this.big_inside_crcle.draw();
             this.big_translucen_crcle.draw();
             this.top_right_small_crcle.draw();
         }
-
+this.pai.draw();
 
     }
 }
