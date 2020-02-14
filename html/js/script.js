@@ -8,6 +8,7 @@ noise.seed(Math.random());
 
 // 処理内容の関数を生成
 const FPS = 20;
+const KEY_FPS = "fps";
 const KEY_CALLBACK      = "callback";
 const KEY_BEGIN_VALUE   = "begin_value";
 const KEY_END_VALUE     = "end_value";
@@ -27,7 +28,7 @@ function getRandomInt(min, max) {
 }
 
 function arcWrap({
-    context         = required(ctx),
+    context         = required(context),
     x               = 1920 / 2,
     y               = 1060 / 2,
     radius          = 10,
@@ -37,6 +38,36 @@ function arcWrap({
     }={}) {
     context.arc(x, y, radius, startAngle, endAngle, anticlockwise);
 }
+
+function arcToWrap({
+    context = required(context),
+    x1,
+    y1,
+    x2,
+    y2,
+    radius,
+    }={}) {
+    context.arcTo(x1, y1, x2, y2, radius);
+}
+
+function moveToWrap({
+    context         = required(context),
+    x,
+    y,
+    }={}) {
+    context.moveTo(x, y);
+}
+
+function lineToWrap({
+    context         = required(context),
+    x,
+    y,
+    }={}) {
+    context.lineTo(x, y);
+}
+
+
+
 
 class DoubleBufferingCanvas {
     constructor(canvas_id, canvas_wrap_name) {
@@ -128,14 +159,15 @@ class DrawBack extends Draw {
     }
 }
 
+let _StaticAnimationController ={ KEY_FPS : FPS };
 class AnimationController {
     constructor({
-        // callback                = null,
+        callback                = null,
         animation_define_sets   = required("animation_define_sets"),
         fps                     = required("fps"),
         } = {}) {
-        //this.callback = callback;
-        this.fps = fps;
+        this.callback = callback;
+        this.fps = _StaticAnimationController[KEY_FPS];
         this.animation_move_sets = [];
         for(let animation_define_set of animation_define_sets) {
             let v = this._getVelocity({
@@ -914,12 +946,12 @@ class DrawStartLainOsPai extends DrawStartLainOsAnimation {
                 ],
                 fps : this.fps,
             });
-        this.num =
+        this.y =
             new AnimationController({
                 animation_define_sets : [
                     {
                         KEY_BEGIN_VALUE     : 0,
-                        KEY_END_VALUE       : 15,
+                        KEY_END_VALUE       : 100,
                         KEY_MILLISECONDS    : 1000,
                     },
                 ],
@@ -940,8 +972,8 @@ class DrawStartLainOsPai extends DrawStartLainOsAnimation {
     _draw() {
         this.x.setIsBeginUpdate();
         this.x.updateValue();
-        this.num.setIsBeginUpdate();
-        this.num.updateValue();
+        this.y.setIsBeginUpdate();
+        this.y.updateValue();
         this.opcity.setIsBeginUpdate();
         this.opcity.updateValue();
 
@@ -951,59 +983,143 @@ class DrawStartLainOsPai extends DrawStartLainOsAnimation {
         this.context.shadowOffsetY = 0;
         this.context.shadowBlur = 15;
 
-        let radius      = 15;
+        let radius      = 10;
         let left_x      = this.display_width / 2 - 50;
         let right_x     = this.display_width / 2 + 50;
         let y           = Math.round(this.display_height * 0.4);
         let herf_radius = radius / 2;
 
+
+
+        // for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
+        //     moveTo(Math.round(left_x), Math.round(y + herf_radius * i + 75));
+        //     arcWrap({
+        //         context         : this.context,
+        //         x               : Math.round(left_x),
+        //         y               : Math.round(y + herf_radius * i + 75),
+        //         radius          : radius,
+        //     });
+        // }
+
+
+// this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+// this.context.fill();
+
+// this.context.beginPath();
+        // moveTo(this.display_width / 2,y);
+        // arcWrap({
+        //     context         : this.context,
+        //     y               : y,
+        //     radius          : 100,
+        //     startAngle      : 120 * Math.PI / 180,
+        //     endAngle        : 60 * Math.PI / 180,
+        // });
+        this.context.fillStyle = "rgba(0,0,0,0)";
+        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        this.context.lineWidth = 20;
         arcWrap({
             context         : this.context,
-            y               : y,
+            x               : 200,
+            y               : 200,
             radius          : 100,
             startAngle      : 120 * Math.PI / 180,
             endAngle        : 60 * Math.PI / 180,
         });
-        this.context.fillStyle = "rgba(0,0,0,0)";
-        this.context.strokeStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
-        this.context.lineWidth = 30;
+
+
+        moveToWrap({
+            context : this.context,
+            x   : Math.round(200+ 100 * Math.cos(120 * Math.PI / 180)),//Math.round(left_x),
+            y   : Math.round(200+ 100 * Math.sin(120 * Math.PI / 180)-20),//Math.round(y + herf_radius * this.num.getValue() + 75)
+        });
+
+        lineToWrap({
+            context : this.context,
+            x   : Math.round(200+ 100 * Math.cos(120 * Math.PI / 180)),//Math.round(left_x),
+            y   : Math.round(200+ 100 * Math.sin(120 * Math.PI / 180) + 100),//Math.round(y + herf_radius * this.num.getValue() + 75)
+        });
+
+
+
+        // arcWrap({
+        //     context : this.context,
+        //     x1      : Math.round(200+ 100 * Math.cos(120 * Math.PI / 180)),
+        //     y1      : Math.round(200+ 100 * Math.sin(120 * Math.PI / 180)),
+        //     x2      : Math.round(200+ 100 * Math.cos(60 * Math.PI / 180)),
+        //     y2      : Math.round(200+ 100 * Math.sin(60 * Math.PI / 180)),
+        //     radius  : 100
+        // });
+
+        // moveToWrap({
+        //     context : this.context,
+        //     x   : Math.round(200+ 100 * Math.cos(120 * Math.PI / 180)),//Math.round(left_x),
+        //     y   : Math.round(200+ 100 * Math.sin(120 * Math.PI / 180)),//Math.round(y + herf_radius * this.num.getValue() + 75)
+        // });
+
+
+        // arcToWrap({
+        //     context : this.context,
+        //     x1      : 200 + Math.round(50 * Math.cos(0 * Math.PI / 180)),
+        //     y1      : 200 + Math.round(50 * Math.sin(0 * Math.PI / 180)),
+        //     x2      : 200 + Math.round(50 * Math.cos(359 * Math.PI / 180)),
+        //     y2      : 200 + Math.round(50 * Math.sin(359 * Math.PI / 180)),
+        //     radius  : 50
+        // });
+        // moveToWrap({
+        //     context : this.context,
+        //     x   : Math.round(50 * Math.cos(120 * Math.PI / 180)),//Math.round(left_x),
+        //     y   : Math.round(50 * Math.sin(120 * Math.PI / 180)),//Math.round(y + herf_radius * this.num.getValue() + 75)
+        // });
+        // lineToWrap({
+        //     context : this.context,
+        //     x   : Math.round(50 * Math.cos(120 * Math.PI / 180)),//Math.round(left_x),
+        //     y   : Math.round(50 * Math.sin(120 * Math.PI / 180)) + 100,//Math.round(y + herf_radius * this.num.getValue() + 75)
+        // });
+
+
+
+
 
         // this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
-        this.context.fill();
+        // this.context.fill();
+        // this.context.stroke();
+        // this.context.closePath();
+        // this.context.beginPath();
+
+        // for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
+        //     arcWrap({
+        //         context         : this.context,
+        //         x               : Math.round(right_x),
+        //         y               : Math.round(y + herf_radius * i + 75),
+        //         radius          : radius,
+        //     });
+        // }
+        // this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        // this.context.fill();
+        // this.context.closePath();
+        // this.context.beginPath();
+
+
+        // for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
+        //     arcWrap({
+        //         context         : this.context,
+        //         x               : Math.round(left_x),
+        //         y               : Math.round(y + herf_radius * i + 75),
+        //         radius          : radius,
+        //     });
+        // }
+
+        // this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        // this.context.fill();
+        // this.context.closePath();
+        // this.context.beginPath();
+
+        // this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
+        // this.context.closePath();
+
         this.context.stroke();
-        this.context.closePath();
-        this.context.beginPath();
-
-        for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
-            arcWrap({
-                context         : this.context,
-                x               : Math.round(right_x),
-                y               : Math.round(y + herf_radius * i + 75),
-                radius          : radius,
-            });
-        }
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
         this.context.fill();
-        this.context.closePath();
-        this.context.beginPath();
 
-
-        for(let i = 0; i <= Math.round(this.num.getValue()); i++) {
-            arcWrap({
-                context         : this.context,
-                x               : Math.round(left_x),
-                y               : Math.round(y + herf_radius * i + 75),
-                radius          : radius,
-            });
-        }
-
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
-        this.context.fill();
-        this.context.closePath();
-        this.context.beginPath();
-
-        this.context.fillStyle = "rgba(69,187,243," + this.opcity.getValue() + ")";
-        this.context.fill();
     }
 }
 
